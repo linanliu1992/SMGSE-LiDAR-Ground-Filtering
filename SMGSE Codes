@@ -1,0 +1,61 @@
+
+Strip-based Multi-scale Ground Seed Extraction
+Input: Raw point cloud P0={pi=(xi,yi,zi)}, Strip width W,
+       Large-window width WL and step SL, Small-window width WS and step SS
+       Virtual grid-cell width G, Minimum consecutive empty-cell number Cmin,
+       ELM elevation-difference threshold δ, Local elevation-consistency threshold Δh,
+       Seed verification threshold β
+Output: Ground seed points Sg
+P ← SOR(P0, k = 20, σ = 2.0) //preprocessed point cloud
+Initialize Sg ← ∅  
+//Partition P into adjacent strips Pk of width W along direction d
+for each strip Pk do
+	// ----Coarse-scale ground seed extraction----
+	Sc ← ∅  // coarse ground seed set
+	for s := coord_min to coord_max step SL do
+		Q := points within a large window of width WL along d
+		Sort Q by z;
+		find first j such that z_(j+1)-z_j<δ
+		if found then
+			Sc := Sc ∪ {pj}
+		else
+			Sc := Sc ∪ {lowest-z point in Q}
+		end if
+	end for
+    // —---Seed-deficient region detection----
+    Partition [coord_min, coord_max] into virtual
+	grid cells of width G and height W
+	Identify consecutive unoccupied cells in Sc
+	E := {empty-cell regions with consecutive count ≥ Cmin}
+	// —---Small-window fine selection----
+	Sf ← ∅  // fine ground seed set
+	for each seed-deficient region (e_start, e_end) ∈ E do
+		for each direction r ∈ {+1, −1} do
+			prev_z := z-coordinate of the nearest known seed on side r
+        	for s := e_start to e_end step r·SS do
+				Q := points within a small window of width WS along direction r
+				Sort Q by z;
+				find first j such that zj+1 − zj < δ
+				if found then
+					pcand := pj
+				else
+					pcand := lowest-z point in Q
+				end if	
+				if zcand − prev_z ≤ Δh then
+					Sf := Sf ∪ {pcand}
+					prev_z := zcand
+				end if
+			end for
+		end for
+	end for
+	// —---Ground seed verification----
+	for each seed si ∈ (Sc ∪ Sf) do
+		 Construct a local neighborhood Ni around si
+		 Fit a local linear elevation trend to Ni using RANSAC
+		 Calculate the absolute vertical residual ri of si
+		 if ri ≤ β then
+			Sg := Sg ∪ {si}
+		end if
+	end for
+end 		
+return Sg
